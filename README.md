@@ -31,3 +31,4 @@ This approach allows HTML5 TV apps, like the one at www.youtube.com/tv, to run i
 
 This implementation is designed to run in basically any browser and given that desktop browsers do not support low latency video playback and they also do not support the MPEG2-TS container, the UI is rendered as a sequence of JPEG images.
 
+Adapting the client to render the UI as a low-latency video stream would be trivial, as long as the browser supports low-latency video playback and the MPEG2-TS video container.
