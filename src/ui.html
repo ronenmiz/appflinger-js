@@ -22,7 +22,7 @@
 	var xhr = new XMLHttpRequest();
 	xhr.open( "GET", snapurl, true );
 	xhr.responseType = "arraybuffer";
-	xhr.timeout = 200;
+	xhr.timeout = 500;
 	xhr.ontimeout = function( e ) {
 	    console.log("Timeout loading image");
 	    setTimeout(function () { loadImg() }, 0);
@@ -40,15 +40,13 @@
 		setTimeout(function () { loadImg() }, 0);
                 return;
 	    }
+	    setTimeout(function () { loadImg() }, 10);
 	    var arrayBufferView = new Uint8Array( this.response );
 	    var blob = new Blob( [ arrayBufferView ], { type: "image/jpeg" });
 	    var urlCreator = window.URL || window.webkitURL;
 	    var imageUrl = urlCreator.createObjectURL( blob );
-	    setTimeout(function () { 
-		var img = document.querySelector( "#snap-img" );
-		img.src = imageUrl;
-		setTimeout(function () { loadImg() }, 150);
-	    });
+	    var img = document.querySelector( "#snap-img" );
+	    img.src = imageUrl;
 	};
 	xhr.send();
     }
