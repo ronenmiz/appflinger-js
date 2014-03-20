@@ -9,7 +9,7 @@ The server side code is closed source and is available for licensing from TVersi
 
 ### What is AppFlinger?
 
-AppFlinger (www.appflinger.com) is a full solution for aggregation, monetization and delivery of TV apps (based on HTML5) to set-top boxes and smart TVs. AppFlinger utilizes the cloud for running the HTML5 TV apps and delivers them as a video stream to target devices with unprecedented quality and responsiveness.
+AppFlinger (www.appflinger.com) is an HTML5 browser (based on Chromium) running in the cloud and delivered to client devices as a video stream,. It is also a full solution for aggregation, monetization and delivery of TV apps (based on HTML5) to set-top boxes and smart TVs. AppFlinger utilizes the cloud for running the HTML5 TV apps and delivers them as a video stream to target devices with unprecedented quality and responsiveness.
 
 AppFlinger makes it possible to run HTML5 TV apps on any device and in the same time makes the full power of desktop-grade HTML5 browsers available to TV app developers.
 
