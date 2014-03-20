@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+<title></title>
+<script src="/client/js/appflinger.js"></script>
+</head>
+
+<style>
+.layer1,.layer2 {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 1280px;
+	height: 720px;
+}
+
+.layer1 {
+	z-index: 0;
+}
+
+.layer2 {
+	z-index: 1;
+}
+
+.ui {
+	margin: 0;
+	padding: 0;
+	border: none;
+	overflow:hidden;
+}
+
+.rcu {
+	z-index: 2;
+	margin: 0;
+	padding: 0;
+	border: none;
+	overflow:hidden;
+	position: absolute;
+	top: 670px;
+	left: 400px;
+	width:500px;
+	height:400px;
+}
+</style>
+
+<body>
+
+<video id="videostream" class="layer1"></video>
+<iframe id="uistream" scrolling="no" class="layer2 ui"></iframe>
+<iframe id="rcu" scrolling="no" class="rcu"></iframe>
+
+<script type="text/javascript">
+	var loaded = false;
+	var paused = true;
+	
+	var videostream = document.getElementById("videostream");
+	var uistream = document.getElementById("uistream");
+	var rcu = document.getElementById("rcu");
+	var isUnloading = false;
+
+	var cb = {
+		load: function(url) {
+			console.log("load -- " + url);
+			loaded = true;
+			videostream.src = url;
+			videostream.load();
+			// load also resets visibilty
+			videostream.style.display = "block";
+			return true;
+		},
+		cancelLoad: function() {
+			console.log("cancelLoad");
+			loaded = false;
+			videostream.src = "";
+			return true;
+		},
+		play: function() {
+			console.log("play");
+			if (loaded)
+			{
+				videostream.play();
+				paused = false;
+				uistream.style.opacity = 0.5;
+				return true;
+			}
+			return false;
+		},
+		pause : function() {
+			console.log("pause");
+			if (loaded)
+			{
+				paused = true;
+				videostream.pause();
+				uistream.style.opacity = 1.0;
+				return true;
+			}
+			return false;
+		},
+		seek : function(time) {
+			console.log("seek -- " + time);
+			
+			if (loaded)
+			{
+				try
+				{
+					videostream.currentTime = time;
+				}
+				catch (e) // InvalidStateError is expected
+				{
+					console.log(e);
+					return false;
+				}
+				return true;
+			}
+			return false;
+		},
+		getPaused : function() {
+			console.log("getPaused");
+			return loaded ? {
+				"paused" : paused
+			} : false;
+		},
+		getSeeking : function() {
+			console.log("getSeeking");
+			return loaded ? {
+				"seeking" : false
+			} : false;
+		},
+		getDuration : function() {
+			console.log("getDuration");
+			return (loaded && typeof videostream.duration == "number" && videostream.duration > 0) ? {
+				"duration" : videostream.duration
+			} : false;
+		},
+		getCurrentTime : function() {
+			console.log("getCurrentTime");
+			return (loaded && typeof videostream.currentTime == "number") ? {
+				"currentTime" : videostream.currentTime
+			} : false;
+		},
+		getMaxTimeSeekable : function() {
+			console.log("getMaxTimeSeekable");
+			return (loaded && typeof videostream.duration == "number") ? {
+				"maxTimeSeekable" : videostream.duration
+			} : false;
+		},
+		getNetworkState : function() {
+			console.log("getNetworkState");
+			return {
+				"networkState" : loaded ? appflingerNetworkStateLoaded
+						: appflingerNetworkStateEmpty
+			};
+		},
+		getReadyState : function() {
+			console.log("getReadyState");
+			return {
+				"readyState" : loaded ? appflingerReadyStateHaveEnoughData
+						: appflingerReadyStateHaveNothing
+			};
+		},
+		setRect : function(x, y, width, height) {
+			console.log("setRect -- " + x + ", " + y + ", " + width + ", "
+					+ height);
+			videostream.style.x = x + "px";
+			videostream.style.y = y + "px";
+			videostream.style.width = width + "px";
+			videostream.style.height = height + "px";
+			return true;
+		},
+		setVisible : function(visible) {
+			console.log("setVisible -- " + visible);
+			videostream.style.display = visible ? "block" : "none";
+			return true;
+		},
+		error : function() {
+			console.log("error");
+			uistream.src = "";
+			videostream.src = "";
+			rcu.src = "";
+			if (!isUnloading)
+				alert("Error communicating with server.\nPlease make sure the session exists and then reload the page to retry.");
+		}
+	};
+
+	// Parse query string args
+	(function() {
+		var qs = window.location.search.substring(1).split("&");
+		this.qs = new Array();
+		for ( var i = 0; i < qs.length; i++) {
+			pair = qs[i].split('=');
+			this.qs[pair[0]] = pair.length > 1 ? decodeURIComponent(pair[1])
+					: "";
+		}
+	})();
+
+	uistream.src = "/client/ui.html?session_id=" + encodeURIComponent(this.qs.session_id);
+	rcu.src = "/remote.html?session_id=" + encodeURIComponent(this.qs.session_id);
+	 
+	window.addEventListener("beforeunload", function(e) {
+		isUnloading = true;
+		// Don't return anything because we do not want any dialog to be displayed
+	});
+
+	if (this.qs["session_id"] == null)
+		alert("Missing session id");
+	else
+		// First argument is the control channel URL
+		// Second argument is the session id
+		// Third argument holds the control channel callbacks
+		appflinger(null, this.qs["session_id"], cb);
+</script>
+</body>
+
+</html>
