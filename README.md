@@ -19,3 +19,15 @@ If you are interested in AppFlinger, please contact us.
 
 If you are the developer of a TV App in HTML5 and would like to reach the existing deployment base of AppFlinger, please contact us as well.
 
+### AppFlinger Uniqueness
+
+AppFlinger is unique in its ability to deliver desktop grade HTML5 browser experience with just having a solid video player on the client and very low bandwidth and CPU requirement on the server (this is unlike cloud gaming where CPU and bandwidth requirements on the server are typically cost-prohibitive).
+
+This is achieved by breaking the browser experience to two video streams. The UI video stream is created in real-time by the server (by encoding the content of the browser window) and delivered to the client for low-latency rendering. The other video stream is the actual video played via the HTML5 media element (aka HTML5 video tag).
+
+This approach allows HTML5 TV apps, like the one at www.youtube.com/tv, to run in the cloud and be delivered to any client device (including ultra low-end and legacy devices).
+
+### Notes about web based client
+
+This implementation is designed to run in basically any browser and given that desktop browsers do not support low latency video playback and they also do not support the MPEG2-TS container, the UI is rendered as a sequence of JPEG images.
+
