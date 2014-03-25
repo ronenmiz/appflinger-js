@@ -1,7 +1,7 @@
 appflinger-js
 =============
 
-appflinger.js is the Javascript client SDK for AppFlinger (www.appflinger.com). It comes with a full client implementation in HTML5/JS that can run on any modern HTML5 capable browser. Firefox and Chrome are the primary target browsers for the client, however support for MP4 format and H.264+AAC codecs is required. Note that the SDK runs on all browsers and does not require HTML5.
+appflinger.js is the Javascript client SDK for AppFlinger (www.appflinger.com). It comes with a full client implementation in HTML5/JS that can run on any modern HTML5 capable browser. Firefox and Chrome are the primary target browsers for the client, however support for MP4 format and H.264+AAC codecs is required. Note that unlike the full client, the SDK runs on all browsers and does not require HTML5.
 
 There is also a C client SDK, available in binary form, and a full client for the Raspberry Pi (please contact us to gain access to it). 
 
