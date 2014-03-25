@@ -40,7 +40,7 @@ function appflinger(controlChannelURL, sessionID, cb)
 		if (http)
 		{
 			url += (url.indexOf("?") >= 0) ? "&" : "?";
-			url += "?ts=" + ((new Date()).getTime());;
+			url += "ts=" + ((new Date()).getTime());
 			if (params != null)
 			{
 				url += "&" + params;
