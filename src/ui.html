@@ -17,7 +17,28 @@
 	}
     }
 
-    function loadImg() {
+    function strToArrayBuffer(str) {
+      var buf = new ArrayBuffer(str.length);
+      var bufView = new Uint8Array(buf);
+      for (var i=0, strLen=str.length; i < strLen; i++) {
+	bufView[i] = str.charCodeAt(i);
+      }
+      return bufView;
+    }
+
+
+    function renderToCanvas(width, height, renderFunction) {
+	var buffer = document.createElement('canvas');
+	buffer.width = width;
+	buffer.height = height;
+	renderFunction(buffer.getContext('2d'));
+	return buffer;
+    }
+
+    var canvas;
+    var context;
+
+    function loadSnapshot() {
 	var snapurl = "/osb/session/snapshot?session_id=" + this.qs["session_id"];
 	var xhr = new XMLHttpRequest();
 	xhr.open( "GET", snapurl, true );
@@ -45,16 +66,271 @@
 	    var blob = new Blob( [ arrayBufferView ], { type: "image/jpeg" });
 	    var urlCreator = window.URL || window.webkitURL;
 	    var imageUrl = urlCreator.createObjectURL( blob );
-	    var img = document.querySelector( "#snap-img" );
+	    var img = new Image();
+	    img.onload = function() {
+		context.drawImage(img, 0, 0);
+	    };
 	    img.src = imageUrl;
 	};
 	xhr.send();
+    }
+
+    function httpStreamGet(logger, url, successCB, errorCB) {
+	fetch(url).then(function(response) {
+	    var reader = response.body.getReader();
+
+	    function readData()
+	    {
+		reader.read().then(function(result) {
+		    if (result.done)
+		    {
+			successCB(null);
+		    }
+		    else
+		    {
+			successCB(result.value.buffer);
+			readData();
+		    }
+		}).catch(function (e) {
+		    logger.log("Failed to read or process data: " + e);
+		    errorCB();
+		});
+	    }
+	    readData();
+	});
+    }
+
+    function parseJSONHeader(jsonStr) {
+	if (jsonStr.trim().length == 0) // empty image header
+	    return null;
+
+	try {
+	    return JSON.parse(jsonStr);
+	} catch (e) { 
+	    console.log(e, " -- in " + jsonStr);
+	}
+	return null;
+    }
+
+    function processImg(imgX, imgY, imgW, imgH, img, alpha)
+    {
+	context.clearRect(imgX-1, imgY-1, imgW, imgH);
+	if (alpha != null)
+	{
+	    var alphaData;
+	    var alphaCanvas = renderToCanvas(alpha.width, alpha.height, function (ctx) {
+		ctx.drawImage(alpha, 0, 0);
+		alphaData = ctx.getImageData(0, 0, alpha.width, alpha.height).data;
+	    });
+	    var imgCanvas = renderToCanvas(img.width, img.height, function (ctx) {
+		ctx.drawImage(img, 0, 0);
+		id = ctx.getImageData(0, 0, img.width, img.height);
+		data = id.data;
+		for (var i=3; i<data.length; i+=4)
+		{
+		    data[i] = alphaData[i-1];
+		}
+		ctx.putImageData(id, 0, 0);
+	    });
+	    context.drawImage(imgCanvas, imgX-1, imgY-1, imgW, imgH);
+	}
+	else
+	    context.drawImage(img, imgX-1, imgY-1, imgW, imgH);
+    };
+
+    function processImgStreamEntry(jsonObj, data)
+    {
+	var totalSize = parseInt(jsonObj.size);
+	var alphaSize = 0;
+	if ("alphaSize" in jsonObj)
+	    alphaSize = parseInt(jsonObj.alphaSize);
+	var imgSize = totalSize - alphaSize;
+
+	var imgX = parseInt(jsonObj.x);
+	var imgY = parseInt(jsonObj.y);
+	var imgW = parseInt(jsonObj.width);
+	var imgH = parseInt(jsonObj.height);
+
+	var alpha = null;
+	var img = new Image();
+	var alphaLoaded = false;
+	var imgLoaded = false;
+	if (alphaSize > 0)
+	{
+	    var bytes = data.slice(imgSize, imgSize+alphaSize);
+	    var blob = new Blob( [bytes], { type: "image/png" });
+	    var urlCreator = window.URL || window.webkitURL;
+	    var imageUrl = urlCreator.createObjectURL( blob );
+	    alpha = new Image();
+	    alpha.onload = function() {
+		alphaLoaded = true;
+		if (imgLoaded)
+		    processImg(imgX, imgY, imgW, imgH, img, alpha);
+	    };
+	    alpha.src = imageUrl;
+	}
+
+	// Get the image
+	var bytes = data.slice(0, imgSize);
+	var blob = new Blob( [bytes], { type: "image/jpeg" });
+	var urlCreator = window.URL || window.webkitURL;
+	var imageUrl = urlCreator.createObjectURL( blob );
+	img.onload = function() {
+            imgLoaded = true;
+	    if (alphaSize > 0 && !alphaLoaded)
+		return;
+	    processImg(imgX, imgY, imgW, imgH, img, alpha);
+	};
+	img.src = imageUrl;
+    }
+
+    function loadImgStreamXHR(url) {
+	var xhr = new XMLHttpRequest();
+	xhr.open( "GET", url, true );
+        //XHR binary charset by Marcus Granado [http://mgran.blogspot.com]
+        xhr.overrideMimeType('text\/plain; charset=x-user-defined') 
+	xhr.ontimeout = function( e ) {
+	    console.log("Timeout loading image");
+	}
+	xhr.onerror = function( e ) {
+	    console.log("Error loading image");
+	}
+	xhr.onabort = function( e ) {
+	    console.log("Aborted loading image load");
+	}
+	var pos = 0;
+	var processData = function() {
+	    var data = xhr.responseText.substring(pos);
+	    var end = data.indexOf("\n\n");
+            if (end < 0)
+            {
+	        setTimeout(processData, 50);
+		return;
+            }
+	    var jsonStr = data.substring(0, end);
+	    var jsonObj = parseJSONHeader(jsonStr);
+	    if (jsonObj == null)
+	    {
+	    	pos += end + 2;
+	        setTimeout(processData, 50);
+		return;
+	    }
+
+            var totalSize = parseInt(jsonObj.size);
+            if (data.length >= end + 2 + totalSize)
+            {
+                pos += end+2+totalSize;
+		var bytes = data.substring(end+2, end+2+totalSize);
+		var arrayBufferView = strToArrayBuffer(bytes);
+		processImgStreamEntry(jsonObj, arrayBufferView);
+
+		// In case there is another image already available
+		setTimeout(processData, 0); 
+	    }
+	    else
+            {
+	        setTimeout(processData, 50);
+            }
+	}
+	xhr.onreadystatechange = function (e) {
+	    if (this.readyState == 3) 
+		processData();
+	}
+	xhr.send();
+    }
+
+    function appendBuffer(buffer1, buffer2) {
+	var tmp = new Uint8Array( buffer1.byteLength + buffer2.byteLength);
+	tmp.set(new Uint8Array( buffer1 ), 0);
+	tmp.set(new Uint8Array( buffer2 ), buffer1.byteLength);
+	return tmp.buffer;
+    }
+
+    function loadImgStreamFetchAPI(url) {
+	var pendingData = null;
+	httpStreamGet(console, url, function(data) {
+	    if (pendingData == null)
+		pendingData = new Uint8Array(data);
+	    else
+		pendingData = new Uint8Array(appendBuffer(pendingData, data));
+
+	    while(1)
+	    {
+		// Find two newline charcaters (which terminate a header)
+		var end = 0;
+		var newlineCode = "\n".charCodeAt(0);
+		while (1)
+		{
+		    end = pendingData.slice(end).indexOf(newlineCode);
+		    if (end < 0)
+			return;
+		    if (pendingData.byteLength > end + 1 && pendingData[end+1] == newlineCode)
+			break;
+		    end++;
+		}
+		var jsonStr = String.fromCharCode.apply(null, pendingData.slice(0, end));
+		var jsonObj = parseJSONHeader(jsonStr);
+		if (jsonObj == null)
+		{
+		    pendingData = pendingData.slice(end+2);
+		    return;
+		}
+
+		var totalSize = parseInt(jsonObj.size);
+		if (pendingData.byteLength >= end + 2 + totalSize)
+		{
+		    processImgStreamEntry(jsonObj, pendingData.slice(end+2, end + 2 + totalSize));
+		    pendingData = pendingData.slice(end + 2 + totalSize);
+		}
+		else
+		    return;
+	    }
+	}, function() {
+	    console.log("Error loading image stream");
+	});
+    }
+
+    function loadImgStream() {
+	var url = "/osb/session/ui?fmt=jpeg&alpha=png&session_id=" + this.qs["session_id"];
+	// use the fetch API in Chrome only for now because we need support
+	// for streaming
+        if (typeof chrome != "undefined")
+	    loadImgStreamFetchAPI(url);
+	else
+	    loadImgStreamXHR(url);
+    }
+    function loadImg() {
+	canvas = document.getElementById('uiCanvas');
+	context = canvas.getContext('2d');
+        if (this.qs["stream"] == "1")
+	    loadImgStream();
+	else
+	    loadSnapshot();
+    }
+
+    function SendHttpRequest (url, params, cb) {
+        var http = new XMLHttpRequest ();
+
+        var theUrl = url + "?ts=" + ((new Date()).getTime());;
+
+        if (params != null)
+            theUrl += "&" + params;
+
+        http.open ("GET", theUrl, true);
+            if (typeof cb == "function")
+                    http.onreadystatechange = function() { cb(http) };
+        http.send (null);
+    }
+
+    function mouseClickCB(e) {
+        SendHttpRequest ("/osb/session/event", "session_id="+this.qs["session_id"]+"&type=click" + "&x=" + e.x  + "&y=" + e.y, null);
     }
     parseQuery();
 </script>
 </header>
 
 <body onload="loadImg()" style="margin:0">
-<img id="snap-img"></img>
+<canvas id="uiCanvas" width="1280" height="720" onclick="mouseClickCB(event)"></canvas>
+
 </body>
 </html>
