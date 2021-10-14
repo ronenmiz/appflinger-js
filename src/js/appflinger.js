@@ -16,34 +16,9 @@ var appflingerReadyStateHaveEnoughData = 4;
 
 function appflinger(controlChannelURL, sessionID, cb)
 {
-	function str2abv (str) {
-		return (new TextEncoder).encode(str);
-	}
-	
-	function str2ab (str) {
-		return str2abv(str).buffer;
-	}
-	
-	function abv2str(abv) {
-		return (new TextDecoder).decode(abv);
-	}
-	
-	function ab2str(ab) {
-		return (new TextDecoder).decode(new Uint8Array(ab));
-	}
-	
-	function abConcat(a, b)
+	function parseFloatStr(str)
 	{
-		if (a == null)
-			return b;
-		
-		if (b == null)
-			return a;
-
-	    var c = new (a.constructor)(a.length + b.length);
-	    c.set(a, 0);
-	    c.set(b, a.length);
-	    return c;
+		return str == "inf" ? Infinity : str == "nan" ? NaN : parseFloat(str);
 	}
 
 	function getHTTPObject ()
@@ -125,169 +100,61 @@ function appflinger(controlChannelURL, sessionID, cb)
 		httpRequest("POST", url, params, data, successCB, errorCB);
 	}
 
-	function processRPCRequest(json, payload, resultCB, responseCB)
+	function createRPCMessage(objProps, payload)
 	{
-		var result;
-		if (json.service == "onPageLoad")
-		{
-			result = cb.onPageLoad();
-		}
-		else if (json.service == "onPageClose")
-		{
-			result = cb.onPageClose();
-		}
-		else if (json.service == "onAddressBarChanged")
-		{
-			result = cb.onAddressBarChanged(json.URL);
-		}
-		else if (json.service == "onTitleChanged")
-		{
-			result = cb.onTitleChanged(json.title);
-		}
-		else if (json.service == "onAccessibilityTreeChanged")
-		{
-			result = cb.onAccessibilityTreeChanged(json.value);
-		}
-		else if (json.service == "load")
-		{
-			result = cb.load(json.instanceId, json.URL);
-		}
-		else if (json.service == "cancelLoad")
-		{
-			result = cb.cancelLoad(json.instanceId);
-		}
-		else if (json.service == "play")
-		{
-			result = cb.play(json.instanceId);
-		}
-		else if (json.service == "pause")
-		{
-			result = cb.pause(json.instanceId);
-		}
-		else if (json.service == "seek")
-		{
-			result = cb.seek(json.instanceId, parseFloat(json.time));
-		}
-		else if (json.service == "getPaused")
-		{
-			result = cb.getPaused(json.instanceId);
-		}
-		else if (json.service == "getSeeking")
-		{
-			result = cb.getSeeking(json.instanceId);
-		}
-		else if (json.service == "getDuration")
-		{
-			result = cb.getDuration(json.instanceId);
-		}
-		else if (json.service == "getCurrentTime")
-		{
-			result = cb.getCurrentTime(json.instanceId);
-		}
-		else if (json.service == "getMaxTimeSeekable")
-		{
-			result = cb.getMaxTimeSeekable(json.instanceId);
-		}
-		else if (json.service == "getNetworkState")
-		{
-			result = cb.getNetworkState(json.instanceId);
-		}
-		else if (json.service == "getReadyState")
-		{
-			result = cb.getReadyState(json.instanceId);
-		}
-		else if (json.service == "getBuffered")
-		{
-			var sourceId = json.hasOwnProperty("sourceId") ? json.sourceId : null;
-			result = cb.getBuffered(json.instanceId, sourceId);
-		}
-		else if (json.service == "setRect")
-		{
-			result = cb.setRect(json.instanceId, parseInt(json.x), parseInt(json.y), parseInt(json.width), parseInt(json.height));
-		}
-		else if (json.service == "setVisible")
-		{
-			result = cb.setVisible(json.instanceId, json.visible == "true" || json.visible == "yes" || json.visible == "1");
-		}
-		else if (json.service == "addSourceBuffer")
-		{
-			result = cb.addSourceBuffer(json.instanceId, json.sourceId, json.type);
-		}
-		else if (json.service == "removeSourceBuffer")
-		{
-			result = cb.removeSourceBuffer(json.instanceId, json.sourceId);
-		}
-		else if (json.service == "resetSourceBuffer")
-		{
-			result = cb.resetSourceBuffer(json.instanceId, json.sourceId);
-		}
-		else if (json.service == "appendBuffer")
-		{
-			var start = json.appendWindowStart == "inf" ? Infinity : Number(json.appendWindowStart);
-			var end = json.appendWindowEnd == "inf" ? Infinity : Number(json.appendWindowEnd);
-			var hasBufferId = json.hasOwnProperty("bufferId");
-			var bufferId = hasBufferId ? json.bufferId : null;
-			var bufferOffset = 0;
-			var bufferLength = 0;
-			if (hasBufferId)
-			{
-				bufferOffset = parseInt(json.bufferOffset);
-				bufferLength = parseInt(json.bufferLength);
-			}
-			result = cb.appendBuffer(json.instanceId, json.sourceId, start, end, bufferId, bufferOffset, bufferLength, payload, responseCB);
-		}
-		else if (json.service == "sendMessage")
-		{
-			result = cb.sendMessage(json.message);
-		}
-		else if (json.service == "loadResource")
-		{
-			var resourceId = json.hasOwnProperty("resourceId") ? json.resourceId : null;
-			var rangeStr = json.hasOwnProperty("byteRange") ? json.byteRange : null;
-			var sequenceNumber = json.hasOwnProperty("sequenceNumber") ? parseInt(json.sequenceNumber) : null;
-			
-			// Convert the range string to an array of two numbers
-			var range = null;
-			if (rangeStr != null)
-			{
-				range = rangeStr.split("-");
-				if (range.length != 2)
-				{
-					console.log("Invalid range:", rangeStr);
-					range = null;
-				}
-				else
-				{
-					range[0] = range[0].trim() == "" ? 0 : parseInt(range[0]);
-					range[1] = range[1].trim() == "" ? Infinity : parseInt(range[1]);
-					
-					// Make sure the parsing succeeded
-					if (isNaN(range[0]) || isNaN(range[1]))
-						range = null;
-				}
-			}
+		var header = JSON.stringify(objProps) + "\n\n";
 
-			result = cb.loadResource(json.url, json.method, json.headers, resourceId, range, sequenceNumber, payload, responseCB);
-		}
-		else if (json.service == "selectKeySystem")
-		{
-			try {
-				 var conf = JSON.parse(json.supportedConfigurations);
-				 result = cb.selectKeySystem(json.keySystem, conf, responseCB);
-			} catch (e) { 
-				console.log(e, " -- in", json.supportedConfigurations);
-				result = false;
-			}
-		}
+		// We need to convert to array buffer when we have a payload
+		// since there is no way to send binary data via XHR that does
+		// not involve array buffers or blobs
+		if (typeof payload == "string")
+			return str2abv(header + payload);
 		else
-		{
-			console.log("Unknown service: " + json.service);
-			result = {error: true, message: "Unknown service: " + json.service};
-		}
-		resultCB(result);
+			return abConcat(str2abv(header), payload);
 	}
 
-	function resultToPostData(result, requestId)
+	function createRPCEvent(props)
+	{
+		let obj = new Object();
+		let payload = null;
+
+		if (typeof props == "object")
+		{
+			if (props.payload)
+			{
+				payload = props.payload;
+				delete props.payload;
+				obj.payloadSize = "" + (typeof payload == "string" ? payload.length : payload.byteLength);
+			}
+
+			for(var prop in props)
+				obj[prop] = props[prop];
+		}
+		
+		return createRPCMessage(obj, payload);
+	}
+
+	function createRPCRequest(service, instanceId, props, payload)
+	{
+		let obj = new Object();
+		obj.sessionId = sessionID;
+		obj.requestId = uuid();
+		obj.service = service;
+
+		if (instanceId)
+			obj.instanceId = instanceId;
+
+		if (typeof props == "object")
+			for(var prop in props)
+				obj[prop] = props[prop];
+
+		if (payload)
+			obj.payloadSize = "" + (typeof payload == "string" ? payload.length : payload.byteLength);
+		
+		return createRPCMessage(obj, payload);
+	}
+
+	function createRPCResponse(result, requestId)
 	{    	
 		if (typeof result != "undefined" && result != null)
 		{
@@ -329,18 +196,238 @@ function appflinger(controlChannelURL, sessionID, cb)
 				objResult.result = "ERROR";
 			}
 			
-			var header = JSON.stringify(objResult) + "\n\n";
-
-			// We need to convert to array buffer when we have a payload
-			// since there is no way to send binary data via XHR that does
-			// not involve array buffers or blobs
-			if (typeof payload == "string")
-				return str2abv(header + payload);
-			else
-				return abConcat(str2abv(header), payload);
+			return createRPCMessage(objResult, payload);
 		}
 
 		return null;
+	}
+
+	function processRPCRequest(json, payload, resultCB, responseCB)
+	{
+		function eventCB(instanceId, props)
+		{
+			// Create a request and send it same as we do for an async response
+			responseCB(createRPCRequest("eventNotification", instanceId, null, createRPCEvent(props)));
+		}
+
+		var result;
+		if (json.service == "onPageLoad")
+		{
+			result = cb.onPageLoad();
+		}
+		else if (json.service == "onPageClose")
+		{
+			result = cb.onPageClose();
+		}
+		else if (json.service == "onAddressBarChanged")
+		{
+			result = cb.onAddressBarChanged(json.URL);
+		}
+		else if (json.service == "onTitleChanged")
+		{
+			result = cb.onTitleChanged(json.title);
+		}
+		else if (json.service == "onAccessibilityTreeChanged")
+		{
+			result = cb.onAccessibilityTreeChanged(json.value);
+		}
+		else if (json.service == "load")
+		{
+			result = cb.load(json.instanceId, json.URL, eventCB);
+		}
+		else if (json.service == "cancelLoad")
+		{
+			result = cb.cancelLoad(json.instanceId);
+		}
+		else if (json.service == "play")
+		{
+			result = cb.play(json.instanceId);
+		}
+		else if (json.service == "pause")
+		{
+			result = cb.pause(json.instanceId);
+		}
+		else if (json.service == "seek")
+		{
+			result = cb.seek(json.instanceId, parseFloatStr(json.time));
+		}
+		else if (json.service == "getPaused")
+		{
+			result = cb.getPaused(json.instanceId);
+		}
+		else if (json.service == "getSeeking")
+		{
+			result = cb.getSeeking(json.instanceId);
+		}
+		else if (json.service == "getDuration")
+		{
+			result = cb.getDuration(json.instanceId);
+		}
+		else if (json.service == "getCurrentTime")
+		{
+			result = cb.getCurrentTime(json.instanceId);
+		}
+		else if (json.service == "getSeekable")
+		{
+			result = cb.getSeekable(json.instanceId);
+		}
+		else if (json.service == "getNetworkState")
+		{
+			result = cb.getNetworkState(json.instanceId);
+		}
+		else if (json.service == "getReadyState")
+		{
+			result = cb.getReadyState(json.instanceId);
+		}
+		else if (json.service == "getBuffered")
+		{
+			var sourceId = json.hasOwnProperty("sourceId") ? json.sourceId : null;
+			result = cb.getBuffered(json.instanceId, sourceId);
+		}
+		else if (json.service == "setRect")
+		{
+			result = cb.setRect(json.instanceId, parseInt(json.x), parseInt(json.y), parseInt(json.width), parseInt(json.height));
+		}
+		else if (json.service == "setVisible")
+		{
+			result = cb.setVisible(json.instanceId, json.visible == "true" || json.visible == "yes" || json.visible == "1");
+		}
+		else if (json.service == "setRate")
+		{
+			result = cb.setRate(json.instanceId, parseFloatStr(json.rate));
+		}
+		else if (json.service == "setVolume")
+		{
+			result = cb.setVolume(json.instanceId, parseFloatStr(json.volume));
+		}
+		else if (json.service == "addSourceBuffer")
+		{
+			result = cb.addSourceBuffer(json.instanceId, json.sourceId, json.type);
+		}
+		else if (json.service == "removeSourceBuffer")
+		{
+			result = cb.removeSourceBuffer(json.instanceId, json.sourceId);
+		}
+		else if (json.service == "abortSourceBuffer")
+		{
+			result = cb.abortSourceBuffer(json.instanceId, json.sourceId);
+		}
+		else if (json.service == "changeSourceBufferType")
+		{
+			result = cb.changeSourceBufferType(json.instanceId, json.sourceId, json.type);
+		}
+		else if (json.service == "appendBuffer")
+		{
+			var start = parseFloatStr(json.appendWindowStart);
+			var end = parseFloatStr(json.appendWindowEnd);
+			var hasBufferId = json.hasOwnProperty("bufferId");
+			var bufferId = hasBufferId ? json.bufferId : null;
+			var bufferOffset = 0;
+			var bufferLength = 0;
+			if (hasBufferId)
+			{
+				bufferOffset = parseInt(json.bufferOffset);
+				bufferLength = parseInt(json.bufferLength);
+			}
+			result = cb.appendBuffer(json.instanceId, json.sourceId, start, end, bufferId, bufferOffset, bufferLength, payload, responseCB);
+		}
+		else if (json.service == "removeBufferRange")
+		{
+			result = cb.removeBufferRange(json.instanceId, json.sourceId, parseFloatStr(json.start), parseFloatStr(json.end), responseCB);
+		}
+		else if (json.service == "setAppendMode")
+		{
+			result = cb.setAppendMode(json.instanceId, json.sourceId, parseInt(json.mode));
+		}
+		else if (json.service == "setAppendTimestampOffset")
+		{
+			result = cb.setAppendTimestampOffset(json.instanceId, json.sourceId, parseFloatStr(json.timestampOffset));
+		}
+		else if (json.service == "sendMessage")
+		{
+			result = cb.sendMessage(json.message);
+		}
+		else if (json.service == "loadResource")
+		{
+			var resourceId = json.hasOwnProperty("resourceId") ? json.resourceId : null;
+			var rangeStr = json.hasOwnProperty("byteRange") ? json.byteRange : null;
+			var sequenceNumber = json.hasOwnProperty("sequenceNumber") ? parseInt(json.sequenceNumber) : null;
+			
+			// Convert the range string to an array of two numbers
+			var range = null;
+			if (rangeStr != null)
+			{
+				range = rangeStr.split("-");
+				if (range.length != 2)
+				{
+					console.log("Invalid range:", rangeStr);
+					range = null;
+				}
+				else
+				{
+					range[0] = range[0].trim() == "" ? 0 : parseInt(range[0]);
+					range[1] = range[1].trim() == "" ? Infinity : parseInt(range[1]);
+					
+					// Make sure the parsing succeeded
+					if (isNaN(range[0]) || isNaN(range[1]))
+						range = null;
+				}
+			}
+
+			result = cb.loadResource(json.url, json.method, json.headers, resourceId, range, sequenceNumber, payload, responseCB);
+		}
+		else if (json.service == "deleteResource")
+		{
+			result = cb.deleteResource(json.bufferId);
+		}
+		else if (json.service == "requestKeySystem")
+		{
+			try {
+				 var conf = JSON.parse(json.supportedConfigurations);
+				 result = cb.requestKeySystem(json.keySystem, conf, responseCB);
+			} catch (e) { 
+				console.log(e, " -- in", json.supportedConfigurations);
+				result = false;
+			}
+		}
+		else if (json.service == "cdmCreate")
+		{
+			result = cb.cdmCreate(json.keySystem, json.securityOrigin, json.allowDistinctiveIdentifier, json.allowPersistentState, responseCB);
+		}
+		else if (json.service == "setCdm")
+		{
+			result = cb.setCdm(json.instanceId, json.cdmId, responseCB);
+		}
+		else if (json.service == "cdmSetServerCertificate")
+		{
+			result = cb.cdmSetServerCertificate(json.cdmId, payload, responseCB);
+		}
+		else if (json.service == "cdmSessionCreate")
+		{
+			result = cb.cdmSessionCreate(json.instanceId, json.cdmId, json.sessionType, json.initDataType, payload, responseCB, eventCB);
+		}
+		else if (json.service == "cdmSessionUpdate")
+		{
+			result = cb.cdmSessionUpdate(json.instanceId, json.cdmId, json.cdmSessionId, payload, responseCB, eventCB);
+		}
+		else if (json.service == "cdmSessionLoad")
+		{
+			result = cb.cdmSessionLoad(json.instanceId, json.cdmId, json.cdmSessionId, responseCB, eventCB);
+		}
+		else if (json.service == "cdmSessionRemove")
+		{
+			result = cb.cdmSessionRemove(json.instanceId, json.cdmId, json.cdmSessionId, responseCB);
+		}
+		else if (json.service == "cdmSessionClose")
+		{
+			result = cb.cdmSessionClose(json.instanceId, json.cdmId, json.cdmSessionId, responseCB);
+		}
+		else
+		{
+			console.log("Unknown service: " + json.service);
+			result = {error: true, message: "Unknown service: " + json.service};
+		}
+		resultCB(result);
 	}
 
 	function indexOfMessage(uint8Response) {
@@ -398,24 +485,24 @@ function appflinger(controlChannelURL, sessionID, cb)
 					return;
 				}
 
-                                // Check for a response to a request we posted
-                                if (typeof msgObj.service == "undefined") {
-                                        // Nothing to do with the response so just continue the long polling
+				// Check for a response to a request we posted
+				if (typeof msgObj.service == "undefined") {
+						// Nothing to do with the response so just continue the long polling
 					setTimeout(function() {
 						longPoll(url, sessionID, null, false);
 					}, 0);
 
-                                        return;
-                                }
+						return;
+				}
 
-                                // If we are here it is a request that we need to process
+				// If we are here it is a request that we need to process
 
 				var requestId = msgObj["requestId"];
 
 				processRPCRequest(msgObj, uint8Response.subarray(msgEndPos + 2),
 				function (result) { // This is immediate responses so that longPolling resumes quickly
 					// post result and wait for another request
-					var postData = result == null ? null : resultToPostData(result, requestId);
+					var postData = result == null ? null : createRPCResponse(result, requestId);
 					setTimeout(function() {
 						longPoll(url, sessionID, postData, false);
 					}, 0);
@@ -426,7 +513,10 @@ function appflinger(controlChannelURL, sessionID, cb)
 						console.log("Internal error");
 						return;
 					}
-					var postData = resultToPostData(result, requestId);
+
+					// If we get an array buffer we post it as is, otherwise we assume it is a result that need to be converted
+					// to an RPC response
+					var postData = (typeof result.byteLength != "undefined") ? result : createRPCResponse(result, requestId);
 					var params = "session_id=" + sessionID;
 					
 					setTimeout(function () {

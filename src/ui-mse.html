@@ -1,0 +1,193 @@
+<html>
+    
+<head>
+    <meta charset="utf-8" />
+    <script type="text/javascript" src="js/mse.js"></script>
+    <script src="/client/js/common.js"></script>
+    <script src="/client/js/mp4.js"></script>
+    <script src="/client/js/appflinger.js"></script>
+	<script src="/client/js/client.js"></script>
+	<script src="/client/js/imgstream.js"></script>
+	<script src="/client/js/input.js"></script>
+	<script src="/client/js/draw.js"></script>
+
+	<style>
+		.layer1, .layer2 {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 1280px;
+			height: 720px;
+			margin: 0;
+		}
+		
+		.layer1 {
+			z-index: 0;
+		}
+		
+		.layer2 {
+			z-index: 1;
+		}
+		
+		.vid {
+			background-color: black;
+		}
+		
+		.ui {
+			margin: 0;
+			padding: 0;
+			border: none;
+			overflow: hidden;
+		}
+	</style>
+</head>
+
+<body>
+  <video width="1280" height="720" muted="muted" latencyHint="0" class="layer2 ui" tabindex="1"></video>
+ 
+  <!-- For Cobalt we need to use img tag since canvas is not supported
+	<img width="1280" height="720" style="display:none; background-color: transparent;" class="layer2 ui" tabindex="1"></img>
+  -->
+  
+  <canvas width="1280" height="720" style="display:none; background-color: transparent;" class="layer2 ui" tabindex="1"></canvas>
+
+  <script type="text/javascript">
+	function drawSnapshot() {
+		loadSnapshot(this.qs["session_id"], function (img) {
+			var arrayBufferView = new Uint8Array(img);
+			var blob = new Blob( [ arrayBufferView ], { type: "image/png" });
+
+			// For img tag
+			// TODO - double buffering to avoid flicker
+			//uiImg.src = window.URL.createObjectURL(blob);
+
+			// For canvas
+			createImageBitmap(blob).then(function(bitmap) {
+				context.clearRect(-1, -1, uiImg.width, uiImg.height);
+				context.drawImage(bitmap, 0, 0);
+			});
+		});
+	}
+	
+	function drawStreamImgCB(imgX, imgY, imgW, imgH, img, alpha, isAlphaGrayscale) {
+		var lastKeyDate = inputHandlers.getLastKeyDate();
+		if (lastKeyDate != null) {
+			console.log("Time since last key:", (new Date()) - lastKeyDate);
+			inputHandlers.setLastKeyDate(null);
+		}
+		drawImgAndAlpha(imgX, imgY, imgW, imgH, img, alpha, isAlphaGrayscale, context);
+	}
+
+	function startUIVideo() {
+		liveStreamHandle = liveStream(console, uiVideo, "/osb/session/ui?fmt=mp4;h264&ts_discon=0&mp4_frag_key=0&mp4_frag_duration=34&gop=100&session_id=" +  this.qs["session_id"], "video/mp4", "avc1.42E01E");
+        //liveStreamHandle = liveStream(console, uiVideo, "/osb/session/ui?fmt=webm;vp8&ts_discon=0&gop=100&session_id=" +  this.qs["session_id"], "video/webm", "vp8");
+	}
+
+	function stopUIVideo() {
+		if (liveStreamHandle != null)
+			abortLiveStream(liveStreamHandle);
+		liveStreamHandle = null;
+	}
+
+    window.MediaSource = window.MediaSource || window.WebKitMediaSource;
+    if (!window.MediaSource) {
+        alert('MediaSource API is not available');
+    }
+
+	var isAlphaGrayscale = false; // A grayscale alpha image is smaller (reduces bandwidth) but requires more client side processing
+    var isUnloading = false;
+    var lastKeyCode = 0;
+    var uiVideo = document.querySelector('video');
+	uiVideo.focus();
+	var uiImgVisible = false;
+	var liveStreamHandle = null;
+	var imgStreamLoaded = false;
+
+	// For img tag
+	//var uiImg = document.querySelector('img');
+
+	// For canvas
+	var uiImg =  document.querySelector('canvas');
+	var context = uiImg.getContext('2d');
+
+    this.qs = parseQueryString();
+    if (this.qs["session_id"] == null)
+		alert("Missing session id");
+	else
+	{
+        window.addEventListener("beforeunload", function(e) {
+            isUnloading = true;
+            // Don't return anything because we do not want any dialog to be displayed
+		});
+		var videoStateDict = {};
+		var loadImgTimer = null;
+		var cb = appflingerCB(uiVideo, this.qs["session_id"],
+			function (instanceId, visible) { // video state callback
+				if (visible == null)
+					delete videoStateDict[instanceId];
+				else if (typeof visible == "boolean")
+					videoStateDict[instanceId] = visible;
+
+				var hasVisibleVideo = Object.entries(videoStateDict).reduce(function (accumulator, currentValue) {
+					return accumulator || currentValue
+				}, false);
+
+				if (hasVisibleVideo) {
+					if (!uiImgVisible) {
+						uiImgVisible = true;
+						stopUIVideo();
+						uiVideo.style.display = "none";
+						uiImg.style.display = "block";
+						uiImg.focus()
+
+						if (this.qs["stream"] == "1") {
+							if (!imgStreamLoaded) {
+								loadImgStream(this.qs["session_id"], isAlphaGrayscale, drawStreamImgCB);
+								imgStreamLoaded = true;
+							}
+						}
+						else
+							loadImgTimer = setInterval(drawSnapshot, 300); // TODO - need to only fetch image if something changed (e.g. via conditional HTTP GET etc.)
+					}
+				} else if (uiImgVisible) {
+					uiImgVisible = false
+					uiVideo.style.display = "block";
+					uiImg.style.display = "none";
+					uiVideo.focus();
+
+					if (this.qs["stream"] == "1")
+						; // TODO - need to abort the image stream
+					else {
+						clearInterval(loadImgTimer);
+						loadImgTimer = null;
+					}
+					startUIVideo();
+				}
+			},
+			function () { // error callback
+				uiVideo.src = "";
+				if (!isUnloading)
+					alert("Error communicating with server.\nPlease make sure the session exists and then reload the page to retry.");
+			}
+		);
+
+		inputHandlers = createInputHandlers(this.qs["session_id"]);
+		uiImg.addEventListener("click", inputHandlers.clickHandler);
+		uiImg.addEventListener("keypress", inputHandlers.keypressHandler);
+		uiImg.addEventListener("keydown", inputHandlers.keydownHandler);
+		uiVideo.addEventListener("click", inputHandlers.clickHandler);
+		uiVideo.addEventListener("keypress", inputHandlers.keypressHandler);
+		uiVideo.addEventListener("keydown", inputHandlers.keydownHandler);
+
+		// First argument is the control channel URL
+		// Second argument is the session id
+		// Third argument holds the control channel callbacks
+        appflinger(null, this.qs["session_id"], cb);
+        
+        startUIVideo();
+	}
+        
+  </script>
+</body>
+   
+</html>

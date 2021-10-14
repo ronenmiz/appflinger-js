@@ -4,38 +4,14 @@
 <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
 <title></title>
 <script src="/client/js/common.js"></script>
-<script src="/client/js/mp4.js"></script>
-<script src="/client/js/appflinger.js"></script>
-<script src="/client/js/client.js"></script>
-</head>
-
 <style>
-.layer1, .layer2 {
+.ui {
 	position: absolute;
 	top: 0;
 	left: 0;
 	width: 1280px;
 	height: 720px;
 	margin: 0;
-}
-
-.layer1 {
-	z-index: 0;
-}
-
-.layer2 {
-	z-index: 1;
-}
-
-.vid {
-	background-color: black;
-}
-
-.ui {
-	margin: 0;
-	padding: 0;
-	border: none;
-	overflow: hidden;
 }
 
 .rcu {
@@ -46,50 +22,41 @@
 	overflow: hidden;
 	position: absolute;
 	top: 670px;
-	left: 400px;
+	left: 390px;
 	width: 500px;
 	height: 400px;
 }
 </style>
+</head>
 
 <body>
 
-<iframe id="uistream" scrolling="no" class="layer2 ui"></iframe>
+<iframe id="uistream" scrolling="no" class="ui"></iframe>
 <iframe id="rcu" scrolling="no" class="rcu"></iframe>
+<!--img src="/dpad.png" style="width:32px; position:absolute; z-index:2; opacity:0.5;" onclick="toggleRCU()"></mg-->
 
 <script type="text/javascript">
 
 	var uistream = document.getElementById("uistream");
 	var rcu = document.getElementById("rcu");
-	var isUnloading = false;
 
 	this.qs = parseQueryString();
-
-	uistream.src = "/client/ui.html?stream=1&session_id="
-			+ encodeURIComponent(this.qs.session_id);
-	rcu.src = "/remote.html?session_id="
-			+ encodeURIComponent(this.qs.session_id);
-
-	window.addEventListener("beforeunload", function(e) {
-		isUnloading = true;
-		// Don't return anything because we do not want any dialog to be displayed
-	});
-
 	if (this.qs["session_id"] == null)
 		alert("Missing session id");
-	else
-	{
-		var cb = appflingerCB(uistream, this.qs["session_id"], function () {
-			uistream.src = "";
-			rcu.src = "";
-			if (!isUnloading)
-				alert("Error communicating with server.\nPlease make sure the session exists and then reload the page to retry.");
-		});
+	else {
+		uistream.src = "/client/ui.html?stream=1&session_id=" + encodeURIComponent(this.qs.session_id);
+		rcu.src = "/remote.html?noKeyInput=1&session_id=" + encodeURIComponent(this.qs.session_id);
+	}
 
-		// First argument is the control channel URL
-		// Second argument is the session id
-		// Third argument holds the control channel callbacks
-		appflinger(null, this.qs["session_id"], cb);
+	function toggleRCU() {
+		if (rcu.style.display != "none") {
+			rcu.style.display = "none";
+			event.target.style.opacity = 0.5;
+		}
+		else {
+			rcu.style.display = "";
+			event.target.style.opacity = 1;
+		}
 	}
 
 </script>

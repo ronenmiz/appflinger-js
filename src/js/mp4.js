@@ -5,8 +5,9 @@ var mp4Dict = {};
 var MP4AtomHeaderSize = 8;
 
 function mp4MimeType(mimeType) {
-	return mimeType.search(/audio\/mp4/i) >= 0
-			|| mimeType.search(/video\/mp4/i) >= 0;
+	return mimeType.search(/audio\/x-m4a/i) >= 0 || mimeType.search(/audio\/m4a/i) >= 0 ||
+		mimeType.search(/video\/x-m4v/i) >= 0 || mimeType.search(/video\/m4v/i) >= 0 ||
+		mimeType.search(/audio\/mp4/i) >= 0 || mimeType.search(/video\/mp4/i) >= 0;
 }
 
 function prependHeaderToData(offset, data) {

@@ -47,6 +47,10 @@ function ab2str(ab) {
 	return (new TextDecoder).decode(new Uint8Array(ab));
 }
 
+function ab2base64(ab) {
+	return btoa(String.fromCharCode.apply(null, new Uint8Array(ab)))
+}
+
 function indexOfBinary(uint8Haystack, uint8Needle) {
 	var ix = 0;
 	while (ix < uint8Haystack.byteLength) {
@@ -72,17 +76,22 @@ function indexOfBinary(uint8Haystack, uint8Needle) {
 
 function uuid() {
 	function s4() {
-		return Math.floor((1 + Math.random()) * 0x10000).toString(16)
-				.substring(1);
+		return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
 	}
 	return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-'
 			+ s4() + s4() + s4();
 }
 
-function getURLHostPath(url) {
+function getURLHost(url) {
 	var l = document.createElement("a");
 	l.href = url;
-	return l.hostname + l.pathname;
+	return l.hostname;
+}
+
+function getURLProto(url) {
+	var l = document.createElement("a");
+	l.href = url;
+	return l.protocol;
 }
 
 function getURLQueryString(url) {
